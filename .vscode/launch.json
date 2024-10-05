@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "externalConsole": true,
+      "cwd": "c:/Users/advik/OneDrive - Trinity College Dublin/Year 4 Semester 1/Computer Vision/Pedestrian_Crossing_Detector",
+      "program": "c:/Users/advik/OneDrive - Trinity College Dublin/Year 4 Semester 1/Computer Vision/Pedestrian_Crossing_Detector/build/Debug/outDebug",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}
