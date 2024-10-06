@@ -1,0 +1,3 @@
+/home/advik/Projects/Pedestrian_Crossing_detector/build/CMakeFiles/myapp.dir
+/home/advik/Projects/Pedestrian_Crossing_detector/build/CMakeFiles/edit_cache.dir
+/home/advik/Projects/Pedestrian_Crossing_detector/build/CMakeFiles/rebuild_cache.dir
