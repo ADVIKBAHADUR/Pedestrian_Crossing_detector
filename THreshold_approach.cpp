@@ -22,8 +22,10 @@ int main() {
         cv::Mat greyimage = toGreyscale(image);
 
         cv::Mat SmoothImage;
+        cv::GaussianBlur(greyimage, greyimage, cv::Size(3, 3), 0);
 
-        cv::medianBlur(greyimage, SmoothImage, 1);
+
+        cv::medianBlur(greyimage, SmoothImage, 3);
 
         cv::Mat binaryimage;
         int thresholdlim = 210;  // Adjust this value to fine-tune the threshold
