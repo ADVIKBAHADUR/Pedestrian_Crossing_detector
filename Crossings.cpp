@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <cmath>
 #include <limits>
+#include <algorithm>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -12,7 +13,7 @@ bool isValidQuadrilateral(const vector<cv::Point>& contour, double minArea, doub
 bool hasValidNeighbor(const vector<vector<cv::Point>>& quadrilaterals, const vector<cv::Point>& current, double distanceTolerance, double angleTolerance);
 double calculateAngle(const cv::Point& p1, const cv::Point& p2);
 void drawGroundTruth(cv::Mat& image, int imageNumber, const int groundTruth[][9]);
-void drawEncompassingPolygon(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals);
+void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals);
 
 int main() {
     string Dataset = "../Dataset/";
@@ -106,8 +107,8 @@ int main() {
         // Draw ground truth
         drawGroundTruth(contourImage, imageNumber, pedestrian_crossing_ground_truth);
 
-        // Draw encompassing polygon
-        drawEncompassingPolygon(contourImage, crossingQuadrilaterals);
+        // Draw encompassing quadrilateral
+        drawEncompassingQuadrilateral(contourImage, crossingQuadrilaterals);
 
         // Save both the thresholded image and the image with contours
         string thresholdedImagePath = Results + "thresholded_" + filename;
@@ -217,39 +218,67 @@ void drawGroundTruth(cv::Mat& image, int imageNumber, const int groundTruth[][9]
     }
 }
 
-void drawEncompassingPolygon(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals) {
+void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals) {
     if (validQuadrilaterals.empty()) {
         return;  // No quadrilaterals to encompass
     }
 
-    int minX = std::numeric_limits<int>::max();
-    int minY = std::numeric_limits<int>::max();
-    int maxX = std::numeric_limits<int>::min();
-    int maxY = std::numeric_limits<int>::min();
+    int imageWidth = image.cols;
+    int imageHeight = image.rows;
 
-    // Find the bounding box that encompasses all quadrilaterals
+    // Find the leftmost, rightmost, topmost, and bottommost points
+    int leftX = imageWidth;
+    int rightX = 0;
+    int topY = imageHeight;
+    int bottomY = 0;
+    cv::Point leftBottom, rightBottom, leftTop, rightTop;
+
     for (const auto& quad : validQuadrilaterals) {
         for (const auto& point : quad) {
-            minX = std::min(minX, point.x);
-            minY = std::min(minY, point.y);
-            maxX = std::max(maxX, point.x);
-            maxY = std::max(maxY, point.y);
+            if (point.x < leftX) {
+                leftX = point.x;
+                if (point.y > leftBottom.y) {
+                    leftBottom = point;
+                }
+            }
+            if (point.x > rightX) {
+                rightX = point.x;
+                if (point.y > rightBottom.y) {
+                    rightBottom = point;
+                }
+            }
+            if (point.y < topY) {
+                topY = point.y;
+                if (point.x < leftTop.x || leftTop.x == 0) {
+                    leftTop = point;
+                }
+                if (point.x > rightTop.x) {
+                    rightTop = point;
+                }
+            }
+            bottomY = std::max(bottomY, point.y);
         }
     }
 
-    // Add 4 pixels to each side
-    minX = std::max(0, minX - 4);
-    minY = std::max(0, minY - 4);
-    maxX = std::min(image.cols - 1, maxX + 4);
-    maxY = std::min(image.rows - 1, maxY + 4);
+    // Extend the bottom points to the image edges
+    leftBottom.x = 0;
+    rightBottom.x = imageWidth - 1;
+
+    // Calculate the slope of the top line
+    double topSlope = static_cast<double>(rightTop.y - leftTop.y) / (rightTop.x - leftTop.x);
+
+    // Extend the top points to the image edges
+    leftTop.x = 0;
+    leftTop.y = static_cast<int>(rightTop.y - topSlope * (imageWidth - 1 - rightTop.x));
+    rightTop.x = imageWidth - 1;
+    rightTop.y = static_cast<int>(leftTop.y + topSlope * (imageWidth - 1));
+
+    // Ensure the y-coordinates are within the image bounds
+    leftTop.y = std::max(0, std::min(leftTop.y, imageHeight - 1));
+    rightTop.y = std::max(0, std::min(rightTop.y, imageHeight - 1));
 
     // Create the polygon points
-    vector<cv::Point> polygonPoints = {
-        cv::Point(minX, minY),
-        cv::Point(maxX, minY),
-        cv::Point(maxX, maxY),
-        cv::Point(minX, maxY)
-    };
+    vector<cv::Point> polygonPoints = {leftTop, rightTop, rightBottom, leftBottom};
 
     // Create a copy of the image for the transparent overlay
     cv::Mat overlay = image.clone();
