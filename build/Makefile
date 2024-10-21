@@ -129,29 +129,29 @@ myapp/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/build
 .PHONY : myapp/fast
 
-BackProjection.o: BackProjection.cpp.o
-.PHONY : BackProjection.o
+Crossings.o: Crossings.cpp.o
+.PHONY : Crossings.o
 
 # target to build an object file
-BackProjection.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/BackProjection.cpp.o
-.PHONY : BackProjection.cpp.o
+Crossings.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/Crossings.cpp.o
+.PHONY : Crossings.cpp.o
 
-BackProjection.i: BackProjection.cpp.i
-.PHONY : BackProjection.i
+Crossings.i: Crossings.cpp.i
+.PHONY : Crossings.i
 
 # target to preprocess a source file
-BackProjection.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/BackProjection.cpp.i
-.PHONY : BackProjection.cpp.i
+Crossings.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/Crossings.cpp.i
+.PHONY : Crossings.cpp.i
 
-BackProjection.s: BackProjection.cpp.s
-.PHONY : BackProjection.s
+Crossings.s: Crossings.cpp.s
+.PHONY : Crossings.s
 
 # target to generate assembly for a file
-BackProjection.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/BackProjection.cpp.s
-.PHONY : BackProjection.cpp.s
+Crossings.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/Crossings.cpp.s
+.PHONY : Crossings.cpp.s
 
 # Help Target
 help:
@@ -162,9 +162,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... myapp"
-	@echo "... BackProjection.o"
-	@echo "... BackProjection.i"
-	@echo "... BackProjection.s"
+	@echo "... Crossings.o"
+	@echo "... Crossings.i"
+	@echo "... Crossings.s"
 .PHONY : help
 
 
