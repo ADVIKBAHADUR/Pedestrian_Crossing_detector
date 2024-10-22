@@ -8,12 +8,16 @@
 using namespace std;
 namespace fs = std::filesystem;
 
+// Function declarations
 cv::Mat toGreyscale(const cv::Mat& image);
 bool isValidQuadrilateral(const vector<cv::Point>& contour, double minArea, double maxArea, double minAspectRatio, double maxAspectRatio);
 bool hasValidNeighbor(const vector<vector<cv::Point>>& quadrilaterals, const vector<cv::Point>& current, double distanceTolerance, double angleTolerance);
 double calculateAngle(const cv::Point& p1, const cv::Point& p2);
 void drawGroundTruth(cv::Mat& image, int imageNumber, const int groundTruth[][9]);
-void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals);
+void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals, int imageNumber, const int groundTruth[][9]);
+double calculateIoU(const cv::Mat& predictedMask, const cv::Mat& groundTruthMask);
+cv::Mat createMaskFromPoints(const vector<cv::Point>& points, const cv::Size& imageSize);
+void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints, int imageNumber, const int groundTruth[][9]);
 
 int main() {
     string Dataset = "../Dataset/";
@@ -107,8 +111,8 @@ int main() {
         // Draw ground truth
         drawGroundTruth(contourImage, imageNumber, pedestrian_crossing_ground_truth);
 
-        // Draw encompassing quadrilateral
-        drawEncompassingQuadrilateral(contourImage, crossingQuadrilaterals);
+        // Draw encompassing quadrilateral and evaluate
+        drawEncompassingQuadrilateral(contourImage, crossingQuadrilaterals, imageNumber, pedestrian_crossing_ground_truth);
 
         // Save both the thresholded image and the image with contours
         string thresholdedImagePath = Results + "thresholded_" + filename;
@@ -213,85 +217,199 @@ void drawGroundTruth(cv::Mat& image, int imageNumber, const int groundTruth[][9]
                 cv::line(image, points[j], points[(j+1)%4], cv::Scalar(128, 0, 128), 2);
             }
 
-            break; // We found the correct ground truth, no need to continue the loop
+            break;
         }
     }
 }
 
-void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals) {
+void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals, 
+                                 int imageNumber, const int groundTruth[][9]) {
     if (validQuadrilaterals.empty()) {
-        return;  // No quadrilaterals to encompass
+        return;
     }
 
     int imageWidth = image.cols;
     int imageHeight = image.rows;
 
-    // Find the leftmost, rightmost, topmost, and bottommost points
-    int leftX = imageWidth;
-    int rightX = 0;
-    int topY = imageHeight;
-    int bottomY = 0;
-    cv::Point leftBottom, rightBottom, leftTop, rightTop;
-
+    // Collect all points from all quadrilaterals
+    vector<cv::Point> allPoints;
     for (const auto& quad : validQuadrilaterals) {
-        for (const auto& point : quad) {
-            if (point.x < leftX) {
-                leftX = point.x;
-                if (point.y > leftBottom.y) {
-                    leftBottom = point;
-                }
-            }
-            if (point.x > rightX) {
-                rightX = point.x;
-                if (point.y > rightBottom.y) {
-                    rightBottom = point;
-                }
-            }
-            if (point.y < topY) {
-                topY = point.y;
-                if (point.x < leftTop.x || leftTop.x == 0) {
-                    leftTop = point;
-                }
-                if (point.x > rightTop.x) {
-                    rightTop = point;
-                }
-            }
-            bottomY = std::max(bottomY, point.y);
-        }
+        allPoints.insert(allPoints.end(), quad.begin(), quad.end());
     }
 
-    // Extend the bottom points to the image edges
-    leftBottom.x = 0;
-    rightBottom.x = imageWidth - 1;
+    // Fit a line to all points using RANSAC
+    cv::Vec4f lineParams;
+    std::vector<cv::Point2f> points_float(allPoints.begin(), allPoints.end());
+    cv::fitLine(points_float, lineParams, cv::DIST_L2, 0, 0.01, 0.01);
 
-    // Calculate the slope of the top line
-    double topSlope = static_cast<double>(rightTop.y - leftTop.y) / (rightTop.x - leftTop.x);
+    // Get the direction vector of the fitted line
+    cv::Point2f direction(lineParams[0], lineParams[1]);
+    cv::Point2f point(lineParams[2], lineParams[3]);
 
-    // Extend the top points to the image edges
-    leftTop.x = 0;
-    leftTop.y = static_cast<int>(rightTop.y - topSlope * (imageWidth - 1 - rightTop.x));
-    rightTop.x = imageWidth - 1;
-    rightTop.y = static_cast<int>(leftTop.y + topSlope * (imageWidth - 1));
+    // Calculate perpendicular direction
+    cv::Point2f perpDirection(-direction.y, direction.x);
 
-    // Ensure the y-coordinates are within the image bounds
-    leftTop.y = std::max(0, std::min(leftTop.y, imageHeight - 1));
-    rightTop.y = std::max(0, std::min(rightTop.y, imageHeight - 1));
+    // Find the extreme points along the perpendicular direction
+    double minPerpProj = std::numeric_limits<double>::max();
+    double maxPerpProj = std::numeric_limits<double>::lowest();
+
+    for (const auto& pt : allPoints) {
+        double perpProj = (pt.x - point.x) * perpDirection.x + (pt.y - point.y) * perpDirection.y;
+        minPerpProj = std::min(minPerpProj, perpProj);
+        maxPerpProj = std::max(maxPerpProj, perpProj);
+    }
+
+    // Add padding to the width
+    double padding = 1.0;
+    maxPerpProj += padding;
+    minPerpProj -= padding;
+
+    // Calculate intersection points with image edges
+    // For left edge (x = 0)
+    double t_left = -point.x / direction.x;
+    cv::Point2f leftIntersect(0, point.y + t_left * direction.y);
+
+    // For right edge (x = imageWidth - 1)
+    double t_right = (imageWidth - 1 - point.x) / direction.x;
+    cv::Point2f rightIntersect(imageWidth - 1, point.y + t_right * direction.y);
+
+    // Calculate the four corners
+    cv::Point topLeft = cv::Point(
+        0,
+        leftIntersect.y + perpDirection.y * minPerpProj
+    );
+    cv::Point topRight = cv::Point(
+        imageWidth - 1,
+        rightIntersect.y + perpDirection.y * minPerpProj
+    );
+    cv::Point bottomLeft = cv::Point(
+        0,
+        leftIntersect.y + perpDirection.y * maxPerpProj
+    );
+    cv::Point bottomRight = cv::Point(
+        imageWidth - 1,
+        rightIntersect.y + perpDirection.y * maxPerpProj
+    );
+
+    // Ensure points are within image bounds
+    auto clampY = [imageHeight](cv::Point& p) {
+        p.y = std::max(0, std::min(p.y, imageHeight - 1));
+    };
+
+    clampY(topLeft);
+    clampY(topRight);
+    clampY(bottomLeft);
+    clampY(bottomRight);
 
     // Create the polygon points
-    vector<cv::Point> polygonPoints = {leftTop, rightTop, rightBottom, leftBottom};
+    vector<cv::Point> polygonPoints = {topLeft, topRight, bottomRight, bottomLeft};
 
     // Create a copy of the image for the transparent overlay
     cv::Mat overlay = image.clone();
 
     // Draw the filled polygon on the overlay
-    cv::fillConvexPoly(overlay, polygonPoints, cv::Scalar(0, 255, 255)); // Yellow color
+    cv::fillConvexPoly(overlay, polygonPoints, cv::Scalar(0, 255, 255));
 
     // Blend the overlay with the original image
-    double alpha = 0.3; // Transparency factor
+    double alpha = 0.3;
     cv::addWeighted(overlay, alpha, image, 1 - alpha, 0, image);
 
     // Draw the outline of the polygon
     for (int i = 0; i < 4; i++) {
         cv::line(image, polygonPoints[i], polygonPoints[(i+1)%4], cv::Scalar(0, 255, 255), 2);
     }
+
+        // Evaluate the detection
+        evaluateDetection(image, polygonPoints, imageNumber, groundTruth);
 }
+
+    double calculateIoU(const cv::Mat& predictedMask, const cv::Mat& groundTruthMask) {
+        cv::Mat intersection, union_;
+        
+        // Calculate intersection and union
+        cv::bitwise_and(predictedMask, groundTruthMask, intersection);
+        cv::bitwise_or(predictedMask, groundTruthMask, union_);
+        
+        // Count non-zero pixels
+        double intersectionArea = cv::countNonZero(intersection);
+        double unionArea = cv::countNonZero(union_);
+        
+        // Calculate IoU
+        if (unionArea > 0) {
+            return intersectionArea / unionArea;
+        }
+        return 0.0;
+    }
+
+    cv::Mat createMaskFromPoints(const vector<cv::Point>& points, const cv::Size& imageSize) {
+        cv::Mat mask = cv::Mat::zeros(imageSize, CV_8UC1);
+        vector<vector<cv::Point>> contours = {points};
+        cv::fillPoly(mask, contours, cv::Scalar(255));
+        return mask;
+    }
+
+    void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints, 
+                        int imageNumber, const int groundTruth[][9]) {
+        // Find the corresponding ground truth for the image
+        for (int i = 0; i < 9; i++) {
+            if (groundTruth[i][0] == imageNumber) {
+                // Create ground truth points
+                vector<cv::Point> groundTruthPoints = {
+                    cv::Point(groundTruth[i][1], groundTruth[i][2]),
+                    cv::Point(groundTruth[i][3], groundTruth[i][4]),
+                    cv::Point(groundTruth[i][7], groundTruth[i][8]),
+                    cv::Point(groundTruth[i][5], groundTruth[i][6])
+                };
+
+                // Create masks for both predicted and ground truth
+                cv::Mat predictedMask = createMaskFromPoints(predictedPoints, image.size());
+                cv::Mat groundTruthMask = createMaskFromPoints(groundTruthPoints, image.size());
+
+                // Calculate IoU
+                double iou = calculateIoU(predictedMask, groundTruthMask);
+
+                // Calculate pixel areas
+                double predictedArea = cv::countNonZero(predictedMask);
+                double groundTruthArea = cv::countNonZero(groundTruthMask);
+                double totalImageArea = image.rows * image.cols;
+
+                // Calculate percentages
+                double predictedPercentage = (predictedArea / totalImageArea) * 100;
+                double groundTruthPercentage = (groundTruthArea / totalImageArea) * 100;
+
+                // Put the metrics on the image
+                cv::putText(image, 
+                        "IoU: " + std::to_string(iou).substr(0, 5), 
+                        cv::Point(10, 30), 
+                        cv::FONT_HERSHEY_SIMPLEX, 
+                        1, 
+                        cv::Scalar(0, 255, 0), 
+                        2);
+
+                cv::putText(image, 
+                        "Pred Area: " + std::to_string(predictedPercentage).substr(0, 5) + "%", 
+                        cv::Point(10, 60), 
+                        cv::FONT_HERSHEY_SIMPLEX, 
+                        1, 
+                        cv::Scalar(0, 255, 255), 
+                        2);
+
+                cv::putText(image, 
+                        "GT Area: " + std::to_string(groundTruthPercentage).substr(0, 5) + "%", 
+                        cv::Point(10, 90), 
+                        cv::FONT_HERSHEY_SIMPLEX, 
+                        1, 
+                        cv::Scalar(128, 0, 128), 
+                        2);
+
+                // Print to console as well
+                cout << "Image " << imageNumber << " Evaluation:" << endl;
+                cout << "IoU: " << iou << endl;
+                cout << "Predicted Area: " << predictedPercentage << "% of image" << endl;
+                cout << "Ground Truth Area: " << groundTruthPercentage << "% of image" << endl;
+                cout << "-------------------" << endl;
+
+                break;
+            }
+        }
+    }
