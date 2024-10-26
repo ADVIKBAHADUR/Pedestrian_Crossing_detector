@@ -71,6 +71,10 @@ int main() {
         vector<cv::Vec4i> hierarchy;
         cv::findContours(binaryImage, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
+                // Create an image to display all initial contours
+        cv::Mat allContoursImage = image.clone();
+        
+
         cout << "Number of contours found: " << contours.size() << endl;
 
         // Clone the original image for drawing contours
@@ -82,15 +86,16 @@ int main() {
         // First pass: collect all valid quadrilaterals
         for (const auto& contour : contours) {
             vector<cv::Point> approx;
-            double epsilon = 0.04 * cv::arcLength(contour, true);
+            double epsilon = 0.02 * cv::arcLength(contour, true);
             cv::approxPolyDP(contour, approx, epsilon, true);
-
+            
             // Allow polygons with 4 to 5 sides
-            if (approx.size() >= 4 && approx.size() <= 5 && 
+            if (approx.size() >= 3 && approx.size() <= 6 && 
                 isValidQuadrilateral(approx, MIN_AREA, MAX_AREA, MIN_ASPECT_RATIO, MAX_ASPECT_RATIO)) {
                 validQuadrilaterals.push_back(approx);
             }
         }
+        cv::drawContours(allContoursImage, validQuadrilaterals, -1, cv::Scalar(0, 255, 0), 2);  // Draw all contours in green
 
         // Second pass: draw quadrilaterals with valid neighbors
         vector<vector<cv::Point>> crossingQuadrilaterals;
@@ -121,6 +126,9 @@ int main() {
         cv::imwrite(thresholdedImagePath, binaryImage);
         cv::imwrite(contourImagePath, contourImage);
         cv::imwrite(smoothImagePath, smoothImage);
+        string allContoursImagePath = Results + "all_contours_" + filename;
+        cv::imwrite(allContoursImagePath, allContoursImage);
+        cout << "All contours image saved as: " << allContoursImagePath << endl;
 
         cout << "Applied to Image: " << filename << endl;
         cout << "Thresholded image saved as: " << thresholdedImagePath << endl;
