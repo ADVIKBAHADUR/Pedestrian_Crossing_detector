@@ -27,12 +27,12 @@ int main() {
     fs::directory_iterator iterpos(Dataset);
 
     // Define area and aspect ratio constraints for quadrilaterals
-    const double MIN_AREA = 150.0;
+    const double MIN_AREA = 100.0;
     const double MAX_AREA = 2500.0;
     const double MIN_ASPECT_RATIO = 0.2;
     const double MAX_ASPECT_RATIO = 20;
     // Define distance and angle tolerances for nearby check
-    const double DISTANCE_TOLERANCE = 100.0; // pixels
+    const double DISTANCE_TOLERANCE = 2.6; // pixels
     const double ANGLE_TOLERANCE = 45.0; // degrees
 
     // Ground truth data
@@ -117,8 +117,10 @@ int main() {
         // Save both the thresholded image and the image with contours
         string thresholdedImagePath = Results + "thresholded_" + filename;
         string contourImagePath = Results + "contours_" + filename;
+        string smoothImagePath = Results + "smooth_" + filename;
         cv::imwrite(thresholdedImagePath, binaryImage);
         cv::imwrite(contourImagePath, contourImage);
+        cv::imwrite(smoothImagePath, smoothImage);
 
         cout << "Applied to Image: " << filename << endl;
         cout << "Thresholded image saved as: " << thresholdedImagePath << endl;
@@ -145,16 +147,44 @@ bool isValidQuadrilateral(const vector<cv::Point>& contour, double minArea, doub
     return (aspectRatio >= minAspectRatio && aspectRatio <= maxAspectRatio);
 }
 
-bool hasValidNeighbor(const vector<vector<cv::Point>>& quadrilaterals, const vector<cv::Point>& current, double distanceTolerance, double angleTolerance) {
+double calculateQuadRadius(const vector<cv::Point>& quad) {
+    // Calculate the center first
+    cv::Point center(0, 0);
+    for (const auto& point : quad) {
+        center += point;
+    }
+    center *= (1.0 / quad.size());
+    
+    // Find the maximum distance from center to any vertex (radius)
+    double maxRadius = 0;
+    for (const auto& point : quad) {
+        double dist = cv::norm(point - center);
+        maxRadius = std::max(maxRadius, dist);
+    }
+    return maxRadius;
+}
+
+bool hasValidNeighbor(const vector<vector<cv::Point>>& quadrilaterals, 
+                     const vector<cv::Point>& current, 
+                     double distanceToleranceFactor,  // This is now a multiplier
+                     double angleTolerance) {
+    // Calculate center of current quadrilateral
     cv::Point currentCenter(0, 0);
     for (const auto& point : current) {
         currentCenter += point;
     }
     currentCenter *= (1.0 / current.size());
+    
+    // Calculate radius of current quadrilateral
+    double currentRadius = calculateQuadRadius(current);
+    
+    // Calculate maximum allowed distance based on radius
+    double maxAllowedDistance = currentRadius * distanceToleranceFactor;
 
     for (const auto& quad : quadrilaterals) {
         if (quad == current) continue;
 
+        // Calculate center of neighboring quadrilateral
         cv::Point quadCenter(0, 0);
         for (const auto& point : quad) {
             quadCenter += point;
@@ -162,8 +192,9 @@ bool hasValidNeighbor(const vector<vector<cv::Point>>& quadrilaterals, const vec
         quadCenter *= (1.0 / quad.size());
 
         double distance = cv::norm(currentCenter - quadCenter);
-
-        if (distance < distanceTolerance) {
+        
+        // Check if the neighbor is within the relative distance
+        if (distance < maxAllowedDistance) {
             double angle = calculateAngle(currentCenter, quadCenter);
             if (std::abs(angle) <= angleTolerance || std::abs(angle - 180) <= angleTolerance) {
                 return true;
@@ -260,7 +291,7 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
     }
 
     // Add padding to the width
-    double padding = 1.0;
+    double padding = 0.0;
     maxPerpProj += padding;
     minPerpProj -= padding;
 
