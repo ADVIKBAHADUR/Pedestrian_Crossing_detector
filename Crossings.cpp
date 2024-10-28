@@ -21,31 +21,52 @@ void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints,
 
 int main() {
     string Dataset = "../Dataset/";
-    string Results = "../Results/";
+    string Results = "../Results_Verification/";
+    string Verification = "../Verification Dataset/";
 
     // Define image iterator
     fs::directory_iterator iterpos(Dataset);
 
     // Define area and aspect ratio constraints for quadrilaterals
     const double MIN_AREA = 100.0;
-    const double MAX_AREA = 2500.0;
+    const double MAX_AREA = 2900.0;
     const double MIN_ASPECT_RATIO = 0.2;
     const double MAX_ASPECT_RATIO = 20;
     // Define distance and angle tolerances for nearby check
-    const double DISTANCE_TOLERANCE = 2.6; // pixels
+    const double DISTANCE_TOLERANCE = 2.7; // pixels
     const double ANGLE_TOLERANCE = 45.0; // degrees
 
     // Ground truth data
+    // int pedestrian_crossing_ground_truth[][9] = {
+    //     { 10,0,132,503,113,0,177,503,148},
+    //     { 11,0,131,503,144,0,168,503,177},
+    //     { 12,0,154,503,164,0,206,503,213},
+    //     { 13,0,110,503,110,0,156,503,144},
+    //     { 14,0,95,503,104,0,124,503,128},
+    //     { 15,0,85,503,91,0,113,503,128},
+    //     { 16,0,65,503,173,0,79,503,215},
+    //     { 17,0,43,503,93,0,89,503,146},
+    //     { 18,0,122,503,117,0,169,503,176}
+    // };
+
     int pedestrian_crossing_ground_truth[][9] = {
-        { 10,0,132,503,113,0,177,503,148},
-        { 11,0,131,503,144,0,168,503,177},
-        { 12,0,154,503,164,0,206,503,213},
-        { 13,0,110,503,110,0,156,503,144},
-        { 14,0,95,503,104,0,124,503,128},
-        { 15,0,85,503,91,0,113,503,128},
-        { 16,0,65,503,173,0,79,503,215},
-        { 17,0,43,503,93,0,89,503,146},
-        { 18,0,122,503,117,0,169,503,176}
+    { 10,0,132,503,113,0,177,503,148},
+    { 11,0,131,503,144,0,168,503,177},
+    { 12,0,154,503,164,0,206,503,213},
+    { 13,0,110,503,110,0,156,503,144},
+    { 14,0,95,503,104,0,124,503,128},
+    { 15,0,85,503,91,0,113,503,128},
+    { 16,0,65,503,173,0,79,503,215},
+    { 17,0,43,503,93,0,89,503,146},
+    { 18,0,122,503,117,0,169,503,176},
+    { 20,0,157,503,131,0,223,503,184},
+    { 21,0,140,503,136,0,190,503,183},
+    { 22,0,114,503,97,0,140,503,123},
+    { 23,0,133,503,122,0,198,503,186},
+    { 24,0,107,503,93,0,146,503,118},
+    { 25,0,58,503,164,0,71,503,204},
+    { 26,0,71,503,131,0,106,503,199},
+    { 27,0,138,503,151,0,179,503,193}
     };
 
     for (const auto& entry : iterpos) {
@@ -221,7 +242,7 @@ double calculateAngle(const cv::Point& p1, const cv::Point& p2) {
 
 void drawGroundTruth(cv::Mat& image, int imageNumber, const int groundTruth[][9]) {
     // Find the corresponding ground truth for the image
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 19; i++) {
         if (groundTruth[i][0] == imageNumber) {
             // Extract coordinates
             int x1 = groundTruth[i][1];
@@ -390,7 +411,7 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
     void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints, 
                         int imageNumber, const int groundTruth[][9]) {
         // Find the corresponding ground truth for the image
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 19; i++) {
             if (groundTruth[i][0] == imageNumber) {
                 // Create ground truth points
                 vector<cv::Point> groundTruthPoints = {
