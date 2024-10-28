@@ -1,9 +1,12 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <filesystem>
+#include <fstream>  // Add this for ofstream
+#include <iomanip>
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <string>  
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -18,8 +21,11 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
 double calculateIoU(const cv::Mat& predictedMask, const cv::Mat& groundTruthMask);
 cv::Mat createMaskFromPoints(const vector<cv::Point>& points, const cv::Size& imageSize);
 void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints, int imageNumber, const int groundTruth[][9]);
-
+void logMetricsToCSV(const string& filename, double iou, double falsePositiveRate, 
+                     double recall, double predictedAreaPercentage, double groundTruthAreaPercentage);
 int main() {
+
+    
     string Dataset = "../Dataset/";
     string Results = "../Results_Verification/";
     string Verification = "../Verification Dataset/";
@@ -75,17 +81,17 @@ int main() {
         cv::Mat smoothImage;
         cv::GaussianBlur(image, smoothImage, cv::Size(5, 5), 0);
         
-        cv::Mat binaryImage;
+        cv::Mat binaryImage, binaryImage0, binaryImage1;
         cv::Mat grayImage;
         cv::cvtColor(smoothImage, grayImage, cv::COLOR_BGR2GRAY);
         int thresholdLim = 190;
-        cv::threshold(grayImage, binaryImage, thresholdLim, 255, cv::THRESH_BINARY);
+        cv::threshold(grayImage, binaryImage0, thresholdLim, 255, cv::THRESH_BINARY);
 
         // Morphological operations
         cv::Mat morph_three_Kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
         cv::Mat morph_five_Kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(7, 7));
-        cv::morphologyEx(binaryImage, binaryImage, cv::MORPH_OPEN, morph_three_Kernel);
-        cv::morphologyEx(binaryImage, binaryImage, cv::MORPH_CLOSE, morph_five_Kernel);
+        cv::morphologyEx(binaryImage0, binaryImage1, cv::MORPH_OPEN, morph_three_Kernel);
+        cv::morphologyEx(binaryImage1, binaryImage, cv::MORPH_CLOSE, morph_five_Kernel);
 
         // Find contours in the thresholded binary image
         vector<vector<cv::Point>> contours;
@@ -93,7 +99,7 @@ int main() {
         cv::findContours(binaryImage, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
                 // Create an image to display all initial contours
-        cv::Mat allContoursImage = image.clone();
+        
         
 
         cout << "Number of contours found: " << contours.size() << endl;
@@ -116,6 +122,8 @@ int main() {
                 validQuadrilaterals.push_back(approx);
             }
         }
+        cv::Mat allContoursImage;
+        cv::cvtColor(binaryImage, allContoursImage, cv::COLOR_GRAY2BGR);
         cv::drawContours(allContoursImage, validQuadrilaterals, -1, cv::Scalar(0, 255, 0), 2);  // Draw all contours in green
 
         // Second pass: draw quadrilaterals with valid neighbors
@@ -142,11 +150,17 @@ int main() {
 
         // Save both the thresholded image and the image with contours
         string thresholdedImagePath = Results + "thresholded_" + filename;
+        string binary0 = Results + "binary0_" + filename;
+        string binary1 = Results + "binary1_" + filename;
         string contourImagePath = Results + "contours_" + filename;
         string smoothImagePath = Results + "smooth_" + filename;
+        string greyPath = Results + "grey_" + filename;
         cv::imwrite(thresholdedImagePath, binaryImage);
         cv::imwrite(contourImagePath, contourImage);
         cv::imwrite(smoothImagePath, smoothImage);
+        // cv::imwrite(greyPath, grayImage);
+        // cv::imwrite(binary0, binaryImage0);
+        // cv::imwrite(binary1, binaryImage1);
         string allContoursImagePath = Results + "all_contours_" + filename;
         cv::imwrite(allContoursImagePath, allContoursImage);
         cout << "All contours image saved as: " << allContoursImagePath << endl;
@@ -408,82 +422,123 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
         return mask;
     }
 
-    void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints, 
-                        int imageNumber, const int groundTruth[][9]) {
-        // Find the corresponding ground truth for the image
-        for (int i = 0; i < 19; i++) {
-            if (groundTruth[i][0] == imageNumber) {
-                // Create ground truth points
-                vector<cv::Point> groundTruthPoints = {
-                    cv::Point(groundTruth[i][1], groundTruth[i][2]),
-                    cv::Point(groundTruth[i][3], groundTruth[i][4]),
-                    cv::Point(groundTruth[i][7], groundTruth[i][8]),
-                    cv::Point(groundTruth[i][5], groundTruth[i][6])
-                };
+void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints, 
+                    int imageNumber, const int groundTruth[][9]) {
+    // Find the corresponding ground truth for the image
+    for (int i = 0; i < 19; i++) {
+        if (groundTruth[i][0] == imageNumber) {
+            // Create ground truth points
+            vector<cv::Point> groundTruthPoints = {
+                cv::Point(groundTruth[i][1], groundTruth[i][2]),
+                cv::Point(groundTruth[i][3], groundTruth[i][4]),
+                cv::Point(groundTruth[i][7], groundTruth[i][8]),
+                cv::Point(groundTruth[i][5], groundTruth[i][6])
+            };
 
-                // Create masks for both predicted and ground truth
-                cv::Mat predictedMask = createMaskFromPoints(predictedPoints, image.size());
-                cv::Mat groundTruthMask = createMaskFromPoints(groundTruthPoints, image.size());
+            // Create masks for both predicted and ground truth
+            cv::Mat predictedMask = createMaskFromPoints(predictedPoints, image.size());
+            cv::Mat groundTruthMask = createMaskFromPoints(groundTruthPoints, image.size());
 
-                // Calculate intersection for recall
-                cv::Mat intersection;
-                cv::bitwise_and(predictedMask, groundTruthMask, intersection);
-                
-                // Calculate areas
-                double intersectionArea = cv::countNonZero(intersection);
-                double predictedArea = cv::countNonZero(predictedMask);
-                double groundTruthArea = cv::countNonZero(groundTruthMask);
-                double totalImageArea = image.rows * image.cols;
+            // Calculate intersection for recall
+            cv::Mat intersection;
+            cv::bitwise_and(predictedMask, groundTruthMask, intersection);
+            
+            // Calculate areas
+            double intersectionArea = cv::countNonZero(intersection);
+            double predictedArea = cv::countNonZero(predictedMask);
+            double groundTruthArea = cv::countNonZero(groundTruthMask);
+            double totalImageArea = image.rows * image.cols;
 
-                // Calculate metrics
-                double iou = calculateIoU(predictedMask, groundTruthMask);
-                double recall = (intersectionArea / groundTruthArea) * 100;  // % of ground truth covered
-                
-                // Calculate false positive area (predicted area that's not in ground truth)
-                cv::Mat falsePositive;
-                cv::bitwise_xor(predictedMask, intersection, falsePositive);
-                double falsePositiveArea = cv::countNonZero(falsePositive);
-                double falsePositiveRate = (falsePositiveArea / predictedArea) * 100;  // % of prediction that's false positive
+            // Calculate metrics
+            double iou = calculateIoU(predictedMask, groundTruthMask);
+            double recall = (intersectionArea / groundTruthArea) * 100;  // % of ground truth covered
+            
+            // Calculate false positive area (predicted area that's not in ground truth)
+            cv::Mat falsePositive;
+            cv::bitwise_xor(predictedMask, intersection, falsePositive);
+            double falsePositiveArea = cv::countNonZero(falsePositive);
+            double falsePositiveRate = (falsePositiveArea / predictedArea) * 100;  // % of prediction that's false positive
 
-                // Calculate percentages for console output
-                double predictedPercentage = (predictedArea / totalImageArea) * 100;
-                double groundTruthPercentage = (groundTruthArea / totalImageArea) * 100;
+            // Calculate percentages for console output
+            double predictedPercentage = (predictedArea / totalImageArea) * 100;
+            double groundTruthPercentage = (groundTruthArea / totalImageArea) * 100;
 
-                // Put the metrics on the image
-                cv::putText(image, 
-                        "IoU: " + std::to_string(iou).substr(0, 5), 
-                        cv::Point(10, 30), 
-                        cv::FONT_HERSHEY_SIMPLEX, 
-                        1, 
-                        cv::Scalar(0, 255, 0), 
-                        2);
+            // Log metrics to CSV
+            string filename = "pc" + std::to_string(imageNumber) + ".png";
+            logMetricsToCSV(filename, iou, falsePositiveRate, recall, 
+                           predictedPercentage, groundTruthPercentage);
 
-                cv::putText(image, 
-                        "Recall: " + std::to_string(recall).substr(0, 5) + "%", 
-                        cv::Point(10, 60), 
-                        cv::FONT_HERSHEY_SIMPLEX, 
-                        1, 
-                        cv::Scalar(0, 255, 255), 
-                        2);
+            // Put the metrics on the image
+            cv::putText(image, 
+                    "IoU: " + std::to_string(iou).substr(0, 5), 
+                    cv::Point(10, 30), 
+                    cv::FONT_HERSHEY_SIMPLEX, 
+                    1, 
+                    cv::Scalar(0, 255, 0), 
+                    2);
 
-                cv::putText(image, 
-                        "FP Rate: " + std::to_string(falsePositiveRate).substr(0, 5) + "%", 
-                        cv::Point(10, 90), 
-                        cv::FONT_HERSHEY_SIMPLEX, 
-                        1, 
-                        cv::Scalar(128, 0, 128), 
-                        2);
+            cv::putText(image, 
+                    "Recall: " + std::to_string(recall).substr(0, 5) + "%", 
+                    cv::Point(10, 60), 
+                    cv::FONT_HERSHEY_SIMPLEX, 
+                    1, 
+                    cv::Scalar(0, 255, 255), 
+                    2);
 
-                // Print to console as well
-                cout << "Image " << imageNumber << " Evaluation:" << endl;
-                cout << "IoU: " << iou << endl;
-                cout << "Recall (GT Coverage): " << recall << "%" << endl;
-                cout << "False Positive Rate: " << falsePositiveRate << "%" << endl;
-                cout << "Predicted Area: " << predictedPercentage << "% of image" << endl;
-                cout << "Ground Truth Area: " << groundTruthPercentage << "% of image" << endl;
-                cout << "-------------------" << endl;
+            cv::putText(image, 
+                    "FP Rate: " + std::to_string(falsePositiveRate).substr(0, 5) + "%", 
+                    cv::Point(10, 90), 
+                    cv::FONT_HERSHEY_SIMPLEX, 
+                    1, 
+                    cv::Scalar(128, 0, 128), 
+                    2);
 
-                break;
-            }
+            // Save masks for debugging if needed
+            cv::imwrite("../Results_Verification/predicted_mask_" + filename, predictedMask);
+            cv::imwrite("../Results_Verification/ground_truth_mask_" + filename, groundTruthMask);
+            cv::imwrite("../Results_Verification/intersection_mask_" + filename, intersection);
+            cv::imwrite("../Results_Verification/false_positive_mask_" + filename, falsePositive);
+
+            // Print to console as well
+            cout << "Image " << imageNumber << " Evaluation:" << endl;
+            cout << "IoU: " << iou << endl;
+            cout << "Recall (GT Coverage): " << recall << "%" << endl;
+            cout << "False Positive Rate: " << falsePositiveRate << "%" << endl;
+            cout << "Predicted Area: " << predictedPercentage << "% of image" << endl;
+            cout << "Ground Truth Area: " << groundTruthPercentage << "% of image" << endl;
+            cout << "-------------------" << endl;
+
+            break;
         }
     }
+}
+    // Function to log data to CSV
+void logMetricsToCSV(const string& filename, double iou, double falsePositiveRate, 
+                     double recall, double predictedAreaPercentage, double groundTruthAreaPercentage) {
+    
+    static bool firstWrite = true;
+    std::ofstream csvFile;
+    
+    if (firstWrite) {
+        // Create new file with headers
+        csvFile.open("../Results_Verification/detection_metrics.csv");
+        csvFile << "Filename,IoU,False Positive Rate (%),Recall (%),Predicted Area (%),Ground Truth Area (%)\n";
+        firstWrite = false;
+    } else {
+        // Append to existing file
+        csvFile.open("../Results_Verification/detection_metrics.csv", std::ios::app);
+    }
+    
+    // Set precision for floating point numbers
+    csvFile << std::fixed << std::setprecision(2);
+    
+    // Write the data
+    csvFile << filename << ","
+            << iou << ","
+            << falsePositiveRate << ","
+            << recall << ","
+            << predictedAreaPercentage << ","
+            << groundTruthAreaPercentage << "\n";
+    
+    csvFile.close();
+}
