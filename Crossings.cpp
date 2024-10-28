@@ -425,15 +425,27 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
                 cv::Mat predictedMask = createMaskFromPoints(predictedPoints, image.size());
                 cv::Mat groundTruthMask = createMaskFromPoints(groundTruthPoints, image.size());
 
-                // Calculate IoU
-                double iou = calculateIoU(predictedMask, groundTruthMask);
-
-                // Calculate pixel areas
+                // Calculate intersection for recall
+                cv::Mat intersection;
+                cv::bitwise_and(predictedMask, groundTruthMask, intersection);
+                
+                // Calculate areas
+                double intersectionArea = cv::countNonZero(intersection);
                 double predictedArea = cv::countNonZero(predictedMask);
                 double groundTruthArea = cv::countNonZero(groundTruthMask);
                 double totalImageArea = image.rows * image.cols;
 
-                // Calculate percentages
+                // Calculate metrics
+                double iou = calculateIoU(predictedMask, groundTruthMask);
+                double recall = (intersectionArea / groundTruthArea) * 100;  // % of ground truth covered
+                
+                // Calculate false positive area (predicted area that's not in ground truth)
+                cv::Mat falsePositive;
+                cv::bitwise_xor(predictedMask, intersection, falsePositive);
+                double falsePositiveArea = cv::countNonZero(falsePositive);
+                double falsePositiveRate = (falsePositiveArea / predictedArea) * 100;  // % of prediction that's false positive
+
+                // Calculate percentages for console output
                 double predictedPercentage = (predictedArea / totalImageArea) * 100;
                 double groundTruthPercentage = (groundTruthArea / totalImageArea) * 100;
 
@@ -447,7 +459,7 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
                         2);
 
                 cv::putText(image, 
-                        "Pred Area: " + std::to_string(predictedPercentage).substr(0, 5) + "%", 
+                        "Recall: " + std::to_string(recall).substr(0, 5) + "%", 
                         cv::Point(10, 60), 
                         cv::FONT_HERSHEY_SIMPLEX, 
                         1, 
@@ -455,7 +467,7 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
                         2);
 
                 cv::putText(image, 
-                        "GT Area: " + std::to_string(groundTruthPercentage).substr(0, 5) + "%", 
+                        "FP Rate: " + std::to_string(falsePositiveRate).substr(0, 5) + "%", 
                         cv::Point(10, 90), 
                         cv::FONT_HERSHEY_SIMPLEX, 
                         1, 
@@ -465,6 +477,8 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
                 // Print to console as well
                 cout << "Image " << imageNumber << " Evaluation:" << endl;
                 cout << "IoU: " << iou << endl;
+                cout << "Recall (GT Coverage): " << recall << "%" << endl;
+                cout << "False Positive Rate: " << falsePositiveRate << "%" << endl;
                 cout << "Predicted Area: " << predictedPercentage << "% of image" << endl;
                 cout << "Ground Truth Area: " << groundTruthPercentage << "% of image" << endl;
                 cout << "-------------------" << endl;
