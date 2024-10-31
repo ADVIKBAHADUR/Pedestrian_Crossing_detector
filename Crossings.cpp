@@ -6,8 +6,9 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
-#include <string>  
-
+#include <string>
+#include <random>
+#include <vector>
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -35,9 +36,9 @@ int main() {
 
     // Define area and aspect ratio constraints for quadrilaterals
     const double MIN_AREA = 100.0;
-    const double MAX_AREA = 2900.0;
+    const double MAX_AREA = 2870.0;
     const double MIN_ASPECT_RATIO = 0.2;
-    const double MAX_ASPECT_RATIO = 20;
+    const double MAX_ASPECT_RATIO = 10;
     // Define distance and angle tolerances for nearby check
     const double DISTANCE_TOLERANCE = 2.7; // pixels
     const double ANGLE_TOLERANCE = 45.0; // degrees
@@ -296,49 +297,204 @@ void drawGroundTruth(cv::Mat& image, int imageNumber, const int groundTruth[][9]
     }
 }
 
+void fitLineRANSAC(const vector<cv::Point2f>& points, cv::Vec4f& lineParams,
+                   int iterations = 6000,          // Increased iterations
+                   double threshold = 3.0) {       // Decreased threshold for tighter fit
+    int n_points = points.size();
+    if (n_points < 2) return;
+
+    unsigned seed = 42;
+    std::default_random_engine generator(seed);
+    std::uniform_int_distribution<int> distribution(0, n_points - 1);
+
+    double best_error = std::numeric_limits<double>::max();
+    cv::Vec4f best_line;
+    int best_inliers = 0;
+
+    // Constants for stricter validation
+    const double MIN_POINT_DISTANCE = 5.0;    // Minimum distance between sampled points
+    const double MIN_INLIER_RATIO = 0.3;       // At least 60% of points must be inliers
+    const double MAX_ANGLE_FROM_HORIZONTAL = 30.0; // Maximum allowed angle from horizontal (degrees)
+    const double MAX_AVERAGE_ERROR = 30.0;      // Maximum allowed average error for inliers
+
+    for (int iter = 0; iter < iterations; iter++) {
+        // 1. Sample two points
+        int idx1 = distribution(generator);
+        int idx2 = distribution(generator);
+        if (idx1 == idx2) continue;
+
+        cv::Point2f p1 = points[idx1];
+        cv::Point2f p2 = points[idx2];
+
+        // 2. Check if points are far enough apart
+        float dx = p2.x - p1.x;
+        float dy = p2.y - p1.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (dist < MIN_POINT_DISTANCE) continue;
+
+        // 3. Check angle from horizontal
+        double angle = std::abs(std::atan2(dy, dx) * 180.0 / CV_PI);
+        if (angle > MAX_ANGLE_FROM_HORIZONTAL && angle < (180.0 - MAX_ANGLE_FROM_HORIZONTAL)) {
+            continue;  // Skip if line is too vertical
+        }
+
+        // 4. Compute normalized direction vector
+        cv::Point2f dir(dx / dist, dy / dist);
+
+        // 5. Count inliers and compute error with stricter criteria
+        int inliers = 0;
+        double total_error = 0;
+        vector<double> errors;  // Store errors for standard deviation calculation
+        
+        for (const auto& point : points) {
+            // Compute distance from point to line
+            double distance = std::abs((point.x - p1.x) * (-dir.y) + 
+                                     (point.y - p1.y) * dir.x);
+            
+            if (distance < threshold) {
+                inliers++;
+                total_error += distance;
+                errors.push_back(distance);
+            }
+        }
+
+        // 6. Check if we have enough inliers
+        double inlier_ratio = static_cast<double>(inliers) / n_points;
+        if (inlier_ratio < MIN_INLIER_RATIO) continue;
+
+        // 7. Calculate average error and standard deviation
+        if (inliers > 0) {
+            double avg_error = total_error / inliers;
+            if (avg_error > MAX_AVERAGE_ERROR) continue;
+
+            // Calculate standard deviation of errors
+            double sq_sum = 0;
+            for (double err : errors) {
+                sq_sum += (err - avg_error) * (err - avg_error);
+            }
+            double std_dev = std::sqrt(sq_sum / inliers);
+
+            // 8. Update best model if this is better
+            bool is_better = false;
+            if (inliers > best_inliers) {
+                is_better = true;
+            } else if (inliers == best_inliers && avg_error < best_error) {
+                is_better = true;
+            }
+
+            if (is_better && std_dev < threshold) {  // Add standard deviation check
+                best_inliers = inliers;
+                best_error = avg_error;
+                best_line[0] = dir.x;
+                best_line[1] = dir.y;
+                best_line[2] = p1.x;
+                best_line[3] = p1.y;
+
+                // Debug output for the best line so far
+                std::cout << "New best line found:" << std::endl;
+                std::cout << "  Inlier ratio: " << inlier_ratio << std::endl;
+                std::cout << "  Average error: " << avg_error << std::endl;
+                std::cout << "  Standard deviation: " << std_dev << std::endl;
+                std::cout << "  Angle from horizontal: " << angle << " degrees" << std::endl;
+            }
+        }
+    }
+
+    // Only accept the result if we found a good enough line
+    if (best_inliers > 0) {
+        lineParams = best_line;
+    } else {
+        std::cout << "Warning: No acceptable line found!" << std::endl;
+        // Set a default horizontal line in the middle of the points
+        double avg_y = 0;
+        for (const auto& pt : points) {
+            avg_y += pt.y;
+        }
+        avg_y /= points.size();
+        lineParams = cv::Vec4f(1.0, 0.0, points[0].x, avg_y);  // Horizontal line
+    }
+}
+
 void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point>>& validQuadrilaterals, 
                                  int imageNumber, const int groundTruth[][9]) {
-    if (validQuadrilaterals.empty()) {
-        return;
-    }
+    if (validQuadrilaterals.empty()) return;
 
-    int imageWidth = image.cols;
-    int imageHeight = image.rows;
-
-    // Collect all points from all quadrilaterals
-    vector<cv::Point> allPoints;
+    // Debug: Draw all valid quadrilaterals in blue
+    cv::Mat debugImage = image.clone();
     for (const auto& quad : validQuadrilaterals) {
-        allPoints.insert(allPoints.end(), quad.begin(), quad.end());
+        for (size_t i = 0; i < quad.size(); i++) {
+            cv::line(debugImage, quad[i], quad[(i+1)%quad.size()], cv::Scalar(255, 0, 0), 2);
+        }
+    }
+    cv::imwrite("../Results_Verification/debug_quads_" + std::to_string(imageNumber) + ".png", debugImage);
+
+    // Collect all points and convert to Point2f
+    vector<cv::Point2f> allPoints;
+    for (const auto& quad : validQuadrilaterals) {
+        for (const auto& point : quad) {
+            allPoints.push_back(cv::Point2f(static_cast<float>(point.x), 
+                                          static_cast<float>(point.y)));
+        }
     }
 
-    // Fit a line to all points using RANSAC
-    cv::Vec4f lineParams;
-    std::vector<cv::Point2f> points_float(allPoints.begin(), allPoints.end());
-    cv::fitLine(points_float, lineParams, cv::DIST_L2, 0, 0.01, 0.01);
+    // Debug: Print number of points
+    std::cout << "Number of points for RANSAC: " << allPoints.size() << std::endl;
 
-    // Get the direction vector of the fitted line
+    // Fit line using RANSAC
+    cv::Vec4f lineParams;
+    fitLineRANSAC(allPoints, lineParams);
+
     cv::Point2f direction(lineParams[0], lineParams[1]);
     cv::Point2f point(lineParams[2], lineParams[3]);
+    
+    // Debug: Print direction vector
+    std::cout << "Direction vector: (" << direction.x << ", " << direction.y << ")" << std::endl;
 
     // Calculate perpendicular direction
     cv::Point2f perpDirection(-direction.y, direction.x);
-
+    const double MAX_WIDTH = 100.0;  // Maximum allowed width in pixels
+    const double MIN_WIDTH = 1.0;   // Minimum allowed width in pixels
     // Find the extreme points along the perpendicular direction
     double minPerpProj = std::numeric_limits<double>::max();
     double maxPerpProj = std::numeric_limits<double>::lowest();
 
+    // First pass to find base line (minimum projection)
     for (const auto& pt : allPoints) {
-        double perpProj = (pt.x - point.x) * perpDirection.x + (pt.y - point.y) * perpDirection.y;
+        double perpProj = (pt.x - point.x) * perpDirection.x + 
+                        (pt.y - point.y) * perpDirection.y;
         minPerpProj = std::min(minPerpProj, perpProj);
-        maxPerpProj = std::max(maxPerpProj, perpProj);
     }
 
-    // Add padding to the width
-    double padding = 0.0;
+    // Second pass to find max projection, but only consider points within MAX_WIDTH
+    for (const auto& pt : allPoints) {
+        double perpProj = (pt.x - point.x) * perpDirection.x + 
+                        (pt.y - point.y) * perpDirection.y;
+        // Only consider points that are within MAX_WIDTH of our minimum
+        if (perpProj - minPerpProj <= MAX_WIDTH) {
+            maxPerpProj = std::max(maxPerpProj, perpProj);
+        }
+    }
+
+    // Calculate width and check if it's valid
+    double width = maxPerpProj - minPerpProj;
+    
+
+    std::cout << "Detected width: " << width << " pixels" << std::endl;
+
+    if (width > MAX_WIDTH || width < MIN_WIDTH) {
+        std::cout << "Width " << width << " pixels is outside acceptable range ["
+                  << MIN_WIDTH << ", " << MAX_WIDTH << "]. Skipping detection." << std::endl;
+        return;
+    }
+
+    // Add padding (but ensure we don't exceed max width)
+    double padding = std::min(width * 0., (MAX_WIDTH - width) / 2);  // 10% padding or whatever space is left
     maxPerpProj += padding;
     minPerpProj -= padding;
 
-    // Calculate intersection points with image edges
+    int imageWidth = image.cols;
+    int imageHeight = image.rows;
+
     // For left edge (x = 0)
     double t_left = -point.x / direction.x;
     cv::Point2f leftIntersect(0, point.y + t_left * direction.y);
@@ -347,55 +503,68 @@ void drawEncompassingQuadrilateral(cv::Mat& image, const vector<vector<cv::Point
     double t_right = (imageWidth - 1 - point.x) / direction.x;
     cv::Point2f rightIntersect(imageWidth - 1, point.y + t_right * direction.y);
 
-    // Calculate the four corners
-    cv::Point topLeft = cv::Point(
-        0,
+    // Debug: Print intersection points
+    std::cout << "Left intersect: (" << leftIntersect.x << ", " << leftIntersect.y << ")" << std::endl;
+    std::cout << "Right intersect: (" << rightIntersect.x << ", " << rightIntersect.y << ")" << std::endl;
+
+    // Calculate the four corners with added bounds checking
+    auto createPoint = [imageWidth, imageHeight](float x, float y) {
+        return cv::Point(
+            std::max(0, std::min(imageWidth - 1, static_cast<int>(x))),
+            std::max(0, std::min(imageHeight - 1, static_cast<int>(y)))
+        );
+    };
+
+    cv::Point topLeft = createPoint(
+        leftIntersect.x,
         leftIntersect.y + perpDirection.y * minPerpProj
     );
-    cv::Point topRight = cv::Point(
-        imageWidth - 1,
+    cv::Point topRight = createPoint(
+        rightIntersect.x,
         rightIntersect.y + perpDirection.y * minPerpProj
     );
-    cv::Point bottomLeft = cv::Point(
-        0,
+    cv::Point bottomLeft = createPoint(
+        leftIntersect.x,
         leftIntersect.y + perpDirection.y * maxPerpProj
     );
-    cv::Point bottomRight = cv::Point(
-        imageWidth - 1,
+    cv::Point bottomRight = createPoint(
+        rightIntersect.x,
         rightIntersect.y + perpDirection.y * maxPerpProj
     );
 
-    // Ensure points are within image bounds
-    auto clampY = [imageHeight](cv::Point& p) {
-        p.y = std::max(0, std::min(p.y, imageHeight - 1));
-    };
+    // Verify the final quadrilateral width
+    double finalHeight1 = cv::norm(topLeft - bottomLeft);
+    double finalHeight2 = cv::norm(topRight - bottomRight);
+    double avgHeight = (finalHeight1 + finalHeight2) / 2;
 
-    clampY(topLeft);
-    clampY(topRight);
-    clampY(bottomLeft);
-    clampY(bottomRight);
+    if (avgHeight > MAX_WIDTH) {
+        std::cout << "Final quadrilateral height " << avgHeight 
+                  << " exceeds maximum allowed width. Skipping detection." << std::endl;
+        return;
+    }
 
-    // Create the polygon points
+    // Debug: Print corner points
+    std::cout << "Corners: TL(" << topLeft.x << "," << topLeft.y << ") "
+              << "TR(" << topRight.x << "," << topRight.y << ") "
+              << "BL(" << bottomLeft.x << "," << bottomLeft.y << ") "
+              << "BR(" << bottomRight.x << "," << bottomRight.y << ")" << std::endl;
+    std::cout << "Final quadrilateral heights: Left=" << finalHeight1 
+              << "px, Right=" << finalHeight2 << "px" << std::endl;
+
     vector<cv::Point> polygonPoints = {topLeft, topRight, bottomRight, bottomLeft};
 
-    // Create a copy of the image for the transparent overlay
+    // Draw the final quadrilateral
     cv::Mat overlay = image.clone();
-
-    // Draw the filled polygon on the overlay
     cv::fillConvexPoly(overlay, polygonPoints, cv::Scalar(0, 255, 255));
-
-    // Blend the overlay with the original image
     double alpha = 0.3;
     cv::addWeighted(overlay, alpha, image, 1 - alpha, 0, image);
-
-    // Draw the outline of the polygon
     for (int i = 0; i < 4; i++) {
         cv::line(image, polygonPoints[i], polygonPoints[(i+1)%4], cv::Scalar(0, 255, 255), 2);
     }
 
-        // Evaluate the detection
-        evaluateDetection(image, polygonPoints, imageNumber, groundTruth);
+    evaluateDetection(image, polygonPoints, imageNumber, groundTruth);
 }
+
 
     double calculateIoU(const cv::Mat& predictedMask, const cv::Mat& groundTruthMask) {
         cv::Mat intersection, union_;
