@@ -129,29 +129,29 @@ myapp/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/build
 .PHONY : myapp/fast
 
-Crossings.o: Crossings.cpp.o
-.PHONY : Crossings.o
+myApplication.o: myApplication.cpp.o
+.PHONY : myApplication.o
 
 # target to build an object file
-Crossings.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/Crossings.cpp.o
-.PHONY : Crossings.cpp.o
+myApplication.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/myApplication.cpp.o
+.PHONY : myApplication.cpp.o
 
-Crossings.i: Crossings.cpp.i
-.PHONY : Crossings.i
+myApplication.i: myApplication.cpp.i
+.PHONY : myApplication.i
 
 # target to preprocess a source file
-Crossings.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/Crossings.cpp.i
-.PHONY : Crossings.cpp.i
+myApplication.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/myApplication.cpp.i
+.PHONY : myApplication.cpp.i
 
-Crossings.s: Crossings.cpp.s
-.PHONY : Crossings.s
+myApplication.s: myApplication.cpp.s
+.PHONY : myApplication.s
 
 # target to generate assembly for a file
-Crossings.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/Crossings.cpp.s
-.PHONY : Crossings.cpp.s
+myApplication.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/myapp.dir/build.make CMakeFiles/myapp.dir/myApplication.cpp.s
+.PHONY : myApplication.cpp.s
 
 # Help Target
 help:
@@ -162,9 +162,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... myapp"
-	@echo "... Crossings.o"
-	@echo "... Crossings.i"
-	@echo "... Crossings.s"
+	@echo "... myApplication.o"
+	@echo "... myApplication.i"
+	@echo "... myApplication.s"
 .PHONY : help
 
 

@@ -24,7 +24,7 @@ cv::Mat createMaskFromPoints(const vector<cv::Point>& points, const cv::Size& im
 void evaluateDetection(cv::Mat& image, const vector<cv::Point>& predictedPoints, int imageNumber, const int groundTruth[][9]);
 void logMetricsToCSV(const string& filename, double iou, double falsePositiveRate, 
                      double recall, double predictedAreaPercentage, double groundTruthAreaPercentage);
-int main() {
+void MyApplication() {
 
     
     string Dataset = "../Dataset/";
@@ -170,8 +170,6 @@ int main() {
         cout << "Thresholded image saved as: " << thresholdedImagePath << endl;
         cout << "Contour image saved as: " << contourImagePath << endl;
     }
-
-    return 0;
 }
 
 cv::Mat toGreyscale(const cv::Mat& image) {
@@ -710,4 +708,8 @@ void logMetricsToCSV(const string& filename, double iou, double falsePositiveRat
             << groundTruthAreaPercentage << "\n";
     
     csvFile.close();
+}
+int main() {
+    MyApplication();
+    return 0;
 }

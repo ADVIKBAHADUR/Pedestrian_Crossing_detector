@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/home/advik/Projects/Pedestrian_Crossing_detector/Crossings.cpp" "CMakeFiles/myapp.dir/Crossings.cpp.o" "gcc" "CMakeFiles/myapp.dir/Crossings.cpp.o.d"
+  "/home/advik/Projects/Pedestrian_Crossing_detector/myApplication.cpp" "CMakeFiles/myapp.dir/myApplication.cpp.o" "gcc" "CMakeFiles/myapp.dir/myApplication.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

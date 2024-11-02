@@ -69,28 +69,28 @@ include CMakeFiles/myapp.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/myapp.dir/flags.make
 
-CMakeFiles/myapp.dir/Crossings.cpp.o: CMakeFiles/myapp.dir/flags.make
-CMakeFiles/myapp.dir/Crossings.cpp.o: /home/advik/Projects/Pedestrian_Crossing_detector/Crossings.cpp
-CMakeFiles/myapp.dir/Crossings.cpp.o: CMakeFiles/myapp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/advik/Projects/Pedestrian_Crossing_detector/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/myapp.dir/Crossings.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/myapp.dir/Crossings.cpp.o -MF CMakeFiles/myapp.dir/Crossings.cpp.o.d -o CMakeFiles/myapp.dir/Crossings.cpp.o -c /home/advik/Projects/Pedestrian_Crossing_detector/Crossings.cpp
+CMakeFiles/myapp.dir/myApplication.cpp.o: CMakeFiles/myapp.dir/flags.make
+CMakeFiles/myapp.dir/myApplication.cpp.o: /home/advik/Projects/Pedestrian_Crossing_detector/myApplication.cpp
+CMakeFiles/myapp.dir/myApplication.cpp.o: CMakeFiles/myapp.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/advik/Projects/Pedestrian_Crossing_detector/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/myapp.dir/myApplication.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/myapp.dir/myApplication.cpp.o -MF CMakeFiles/myapp.dir/myApplication.cpp.o.d -o CMakeFiles/myapp.dir/myApplication.cpp.o -c /home/advik/Projects/Pedestrian_Crossing_detector/myApplication.cpp
 
-CMakeFiles/myapp.dir/Crossings.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/myapp.dir/Crossings.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/advik/Projects/Pedestrian_Crossing_detector/Crossings.cpp > CMakeFiles/myapp.dir/Crossings.cpp.i
+CMakeFiles/myapp.dir/myApplication.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/myapp.dir/myApplication.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/advik/Projects/Pedestrian_Crossing_detector/myApplication.cpp > CMakeFiles/myapp.dir/myApplication.cpp.i
 
-CMakeFiles/myapp.dir/Crossings.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/myapp.dir/Crossings.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/advik/Projects/Pedestrian_Crossing_detector/Crossings.cpp -o CMakeFiles/myapp.dir/Crossings.cpp.s
+CMakeFiles/myapp.dir/myApplication.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/myapp.dir/myApplication.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/advik/Projects/Pedestrian_Crossing_detector/myApplication.cpp -o CMakeFiles/myapp.dir/myApplication.cpp.s
 
 # Object files for target myapp
 myapp_OBJECTS = \
-"CMakeFiles/myapp.dir/Crossings.cpp.o"
+"CMakeFiles/myapp.dir/myApplication.cpp.o"
 
 # External object files for target myapp
 myapp_EXTERNAL_OBJECTS =
 
-myapp: CMakeFiles/myapp.dir/Crossings.cpp.o
+myapp: CMakeFiles/myapp.dir/myApplication.cpp.o
 myapp: CMakeFiles/myapp.dir/build.make
 myapp: /usr/local/lib/libopencv_gapi.so.4.10.0
 myapp: /usr/local/lib/libopencv_stitching.so.4.10.0
